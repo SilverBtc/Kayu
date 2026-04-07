@@ -109,3 +109,9 @@ hint-report/
 
 # Misc
 .DS_STore
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
