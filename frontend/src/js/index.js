@@ -1,563 +1,238 @@
-import '@georapbox/a-tab-group/dist/a-tab-group.js';
-import '@georapbox/web-share-element/dist/web-share-defined.js';
-import '@georapbox/files-dropzone-element/dist/files-dropzone-defined.js';
-import '@georapbox/resize-observer-element/dist/resize-observer-defined.js';
-import '@georapbox/modal-element/dist/modal-element-defined.js';
-import '@georapbox/alert-element/dist/alert-element-defined.js';
-import { ACCEPTED_MIME_TYPES } from './constants.js';
-import { getSettings, setSettings } from './services/storage.js';
-import { debounce } from './utils/debounce.js';
-import { log } from './utils/log.js';
-import { isDialogElementSupported } from './utils/isDialogElementSupported.js';
-import { createResult } from './helpers/result.js';
-import { triggerScanEffects } from './helpers/triggerScanEffects.js';
-import { resizeScanFrame } from './helpers/resizeScanFrame.js';
-import { BarcodeReader } from './helpers/BarcodeReader.js';
-import { toggleTorchButtonStatus } from './helpers/toggleTorchButtonStatus.js';
-import { toastify } from './helpers/toastify.js';
 import { VideoCapture } from './components/video-capture.js';
-import './components/clipboard-copy.js';
-import './components/bs-result.js';
-import './components/bs-settings.js';
-import './components/bs-history.js';
+import { BarcodeReader } from './helpers/BarcodeReader.js';
 
-(async function () {
-  const tabGroupEl = document.querySelector('a-tab-group');
-  const videoCaptureEl = document.querySelector('video-capture');
-  const bsSettingsEl = document.querySelector('bs-settings');
-  const bsHistoryEl = document.querySelector('bs-history');
-  const cameraPanel = document.getElementById('cameraPanel');
-  const cameraResultsEl = cameraPanel.querySelector('.results');
-  const filePanel = document.getElementById('filePanel');
-  const fileResultsEl = filePanel.querySelector('.results');
-  const scanInstructionsEl = document.getElementById('scanInstructions');
-  const scanBtn = document.getElementById('scanBtn');
-  const dropzoneEl = document.getElementById('dropzone');
-  const resizeObserverEl = document.querySelector('resize-observer');
-  const scanFrameEl = document.getElementById('scanFrame');
-  const torchButton = document.getElementById('torchButton');
-  const globalActionsEl = document.getElementById('globalActions');
-  const historyBtn = document.getElementById('historyBtn');
-  const historyDialog = document.getElementById('historyDialog');
-  const settingsBtn = document.getElementById('settingsBtn');
-  const settingsDialog = document.getElementById('settingsDialog');
-  const settingsForm = document.getElementById('settingsForm');
-  const cameraSelect = document.getElementById('cameraSelect');
-  const SCAN_RATE_LIMIT = 1000;
+const API_BASE_URL = 'http://localhost:3000/api/products/openfoodfacts/';
+const BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'code_128', 'code_39'];
+const SCAN_INTERVAL_MS = 700;
+
+(async function init() {
+  const videoCaptureEl = document.getElementById('videoCapture');
+  const statusEl = document.getElementById('status');
+  const errorEl = document.getElementById('error');
+  const barcodeValueEl = document.getElementById('barcodeValue');
+  const productCardEl = document.getElementById('productCard');
+  const productImageEl = document.getElementById('productImage');
+  const productDetailsEl = document.getElementById('productDetails');
+
+  let barcodeReader = null;
   let scanTimeoutId = null;
-  let shouldScan = true;
-
-  // By default the dialog elements are hidden for browsers that don't support the dialog element.
-  // If the dialog element is supported, we remove the hidden attribute and the dialogs' visibility
-  // is controlled by using the `showModal()` and `close()` methods.
-  if (isDialogElementSupported()) {
-    globalActionsEl?.removeAttribute('hidden');
-    historyDialog?.removeAttribute('hidden');
-    settingsDialog?.removeAttribute('hidden');
-  }
-
-  const { barcodeReaderError } = await BarcodeReader.setup();
-
-  if (barcodeReaderError) {
-    const alertEl = document.getElementById('barcodeReaderError');
-
-    shouldScan = false;
-    globalActionsEl?.setAttribute('hidden', '');
-    tabGroupEl?.setAttribute('hidden', '');
-    alertEl?.setAttribute('open', '');
-
-    return; // Stop the script execution as BarcodeDetector API is not supported.
-  }
-
-  const supportedBarcodeFormats = await BarcodeReader.getSupportedFormats();
-  const [, settings] = await getSettings();
-  const intitialFormats = settings?.formats || supportedBarcodeFormats;
-  let barcodeReader = await BarcodeReader.create(intitialFormats);
-
-  videoCaptureEl.addEventListener('video-capture:video-play', handleVideoCapturePlay, {
-    once: true
-  });
-
-  videoCaptureEl.addEventListener('video-capture:error', handleVideoCaptureError, {
-    once: true
-  });
+  let lastDetectedCode = '';
+  let pageIsClosing = false;
 
   VideoCapture.defineCustomElement();
 
-  const videoCaptureShadowRoot = videoCaptureEl?.shadowRoot;
-  const videoCaptureVideoEl = videoCaptureShadowRoot?.querySelector('video');
-  const videoCaptureActionsEl = videoCaptureShadowRoot?.querySelector('[part="actions-container"]');
+  const { barcodeReaderError } = await BarcodeReader.setup();
+  if (barcodeReaderError) {
+    showError('Votre navigateur ne supporte pas la detection de code-barres.');
+    setStatus('Scanner indisponible.');
+    return;
+  }
 
-  dropzoneEl.accept = ACCEPTED_MIME_TYPES.join(',');
-  bsSettingsEl.supportedFormats = supportedBarcodeFormats;
+  const supportedFormats = await BarcodeReader.getSupportedFormats();
+  const selectedFormats = BARCODE_FORMATS.filter(format => supportedFormats.includes(format));
+  const activeFormats = selectedFormats.length > 0 ? selectedFormats : supportedFormats;
 
-  // let lastScanTime = 0;
+  if (activeFormats.length === 0) {
+    showError('Aucun format de code-barres n est supporte sur ce navigateur.');
+    setStatus('Scanner indisponible.');
+    return;
+  }
 
-  /**
-   * Scans for barcodes.
-   * If a barcode is detected, it stops scanning and displays the result.
-   *
-   * @returns {Promise<void>} - A Promise that resolves when the barcode is detected.
-   */
-  async function scan() {
-    if (!shouldScan) {
+  barcodeReader = await BarcodeReader.create(activeFormats);
+  clearError();
+
+  videoCaptureEl.addEventListener('video-capture:video-play', () => {
+    applyZoomX2(videoCaptureEl);
+    // setStatus('Camera active. Placez un code-barres au centre.');
+    startScanLoop();
+  });
+
+  videoCaptureEl.addEventListener('video-capture:error', evt => {
+    const errorName = evt?.detail?.error?.name || '';
+
+    if (errorName === 'NotAllowedError') {
+      showError('Acces camera refuse. Autorisez la camera puis rechargez la page.');
+    } else if (errorName === 'NotFoundError') {
+      showError('Aucune camera detectee.');
+    } else {
+      showError('Impossible d initialiser la camera.');
+    }
+
+    setStatus('Camera indisponible.');
+    stopScanLoop();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      stopScanLoop();
+      videoCaptureEl.stopVideoStream?.();
       return;
     }
 
-    log.info('Scanning...');
+    if (document.visibilityState === 'visible') {
+      videoCaptureEl.startVideoStream?.();
+      startScanLoop();
+    }
+  });
 
-    scanInstructionsEl?.removeAttribute('hidden');
+  window.addEventListener('beforeunload', () => {
+    pageIsClosing = true;
+    stopScanLoop();
+    videoCaptureEl.stopVideoStream?.();
+  });
+
+  function applyZoomX2(captureEl) {
+    const capabilities = captureEl.getTrackCapabilities?.();
+    if (!capabilities?.zoom) {
+      setStatus('Camera active. Zoom materiel indisponible, scan en mode normal.');
+      return;
+    }
+
+    const minZoom = Number(capabilities.zoom.min ?? 1);
+    const maxZoom = Number(capabilities.zoom.max ?? 1);
+    const targetZoom = 200 // clamp(2, minZoom, maxZoom);
+    console.log(`Applying zoom: ${targetZoom} (min: ${minZoom}, max: ${maxZoom})`);
+    captureEl.zoom = targetZoom;
+
+    const zoomLabel = targetZoom === 2 ? 'x2' : `x${targetZoom.toFixed(1)}`;
+    setStatus(`Camera active. Zoom ${zoomLabel}. Placez un code-barres au centre.`);
+  }
+
+  function startScanLoop() {
+    if (pageIsClosing || !barcodeReader) {
+      return;
+    }
+
+    stopScanLoop();
+    scanLoop();
+  }
+
+  function stopScanLoop() {
+    if (scanTimeoutId != null) {
+      clearTimeout(scanTimeoutId);
+      scanTimeoutId = null;
+    }
+  }
+
+  async function scanLoop() {
+    if (pageIsClosing || !barcodeReader) {
+      return;
+    }
 
     try {
-      const [, settings] = await getSettings();
-      const barcode = await barcodeReader.detect(videoCaptureVideoEl);
-      const barcodeValue = barcode?.rawValue ?? '';
-
-      if (!barcodeValue) {
-        throw new Error('No barcode detected');
+      const videoEl = videoCaptureEl.shadowRoot?.querySelector('video');
+      if (!videoEl) {
+        throw new Error('Video stream not ready');
       }
 
-      createResult(cameraResultsEl, barcodeValue);
+      const barcode = await barcodeReader.detect(videoEl);
+      const barcodeValue = (barcode?.rawValue || '').trim();
 
-      if (settings?.addToHistory) {
-        bsHistoryEl?.add(barcodeValue);
-      }
-
-      triggerScanEffects();
-
-      if (!settings?.continueScanning) {
-        if (scanTimeoutId) {
-          clearTimeout(scanTimeoutId);
-          scanTimeoutId = null;
-        }
-        scanBtn?.removeAttribute('hidden');
-        scanFrameEl?.setAttribute('hidden', '');
-        videoCaptureActionsEl?.setAttribute('hidden', '');
-        return;
+      if (barcodeValue.length > 0 && barcodeValue !== lastDetectedCode) {
+        lastDetectedCode = barcodeValue;
+        barcodeValueEl.textContent = barcodeValue;
+        await fetchAndRenderProduct(barcodeValue);
       }
     } catch {
-      // If no barcode is detected, the error is caught here.
-      // We can ignore the error and continue scanning.
-    }
-
-    if (shouldScan) {
-      scanTimeoutId = setTimeout(() => scan(), SCAN_RATE_LIMIT);
+      // No barcode in this frame, continue scanning.
+    } finally {
+      scanTimeoutId = window.setTimeout(scanLoop, SCAN_INTERVAL_MS);
     }
   }
 
-  /**
-   * Handles the click event on the scan button.
-   * It is responsible for clearing previous results and starting the scan process again.
-   */
-  function handleScanButtonClick() {
-    scanBtn?.setAttribute('hidden', '');
-    scanFrameEl?.removeAttribute('hidden');
-    videoCaptureActionsEl?.removeAttribute('hidden');
-    // hideResult(cameraPanel);
-    scan();
-  }
+  async function fetchAndRenderProduct(barcodeValue) {
+    clearError();
+    clearProduct();
+    setStatus(`Code detecte: ${barcodeValue}. Chargement des infos produit...`);
 
-  /**
-   * Handles the tab show event.
-   * It is responsible for starting or stopping the scan process based on the selected tab.
-   *
-   * @param {CustomEvent} evt - The event object.
-   */
-  function handleTabShow(evt) {
-    const tabId = evt.detail.tabId;
-    const videoCaptureEl = document.querySelector('video-capture'); // Get the latest instance of video-capture element to ensure we don't use the cached one.
-
-    if (tabId === 'cameraTab') {
-      shouldScan = true;
-
-      if (!videoCaptureEl) {
-        return;
+    try {
+      const response = await fetch(`${API_BASE_URL}${encodeURIComponent(barcodeValue)}`);
+      if (!response.ok) {
+        throw new Error('API request failed');
       }
 
-      if (!videoCaptureEl.loading && scanBtn.hasAttribute('hidden')) {
-        scanFrameEl?.removeAttribute('hidden');
-        videoCaptureActionsEl?.removeAttribute('hidden');
-        scan();
+      const payload = await response.json();
+      const product = payload?.data;
+
+      if (payload?.status !== 'ok' || !product) {
+        throw new Error('Invalid API response');
       }
 
-      if (typeof videoCaptureEl.startVideoStream === 'function') {
-        const videoDeviceId = cameraSelect?.value || undefined;
-        videoCaptureEl.startVideoStream(videoDeviceId);
-      }
-    } else if (tabId === 'fileTab') {
-      shouldScan = false;
-
-      if (videoCaptureEl != null && typeof videoCaptureEl.stopVideoStream === 'function') {
-        videoCaptureEl.stopVideoStream();
-      }
-
-      scanFrameEl?.setAttribute('hidden', '');
-      videoCaptureActionsEl?.setAttribute('hidden', '');
+      renderProduct(product);
+      setStatus(`Infos produit chargees pour ${barcodeValue}.`);
+    } catch {
+      showError(`Aucune info produit trouvee pour le code ${barcodeValue}.`);
+      setStatus('Scan actif. Presentez un autre code-barres.');
     }
   }
 
-  /**
-   * Handles the selection of a file.
-   * It is responsible for displaying the selected file in the dropzone.
-   *
-   * @param {File} file - The selected file.
-   */
-  async function handleFileSelect(file) {
-    if (!file) {
-      return;
-    }
+  function renderProduct(product) {
+    const rows = [
+      ['Nom', product.product_name_fr || product.product_name || '-'],
+      ['Marque', product.brands || '-'],
+      ['Quantite', product.quantity || '-'],
+      ['NutriScore', normalizeGrade(product.nutriscore_grade)],
+      ['NOVA', normalizeValue(product.nova_group)],
+      ['EcoScore', normalizeGrade(product.ecoscore_grade)],
+      ['Ingredients FR', product.ingredients_text_fr || '-']
+    ];
 
-    const [, settings] = await getSettings();
-    const image = new Image();
-    const reader = new FileReader();
+    rows.forEach(([label, value]) => {
+      const dt = document.createElement('dt');
+      dt.textContent = label;
 
-    reader.onload = evt => {
-      const data = evt.target.result;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
 
-      image.onload = async () => {
-        try {
-          const barcode = await barcodeReader.detect(image);
-          const barcodeValue = barcode?.rawValue ?? '';
-
-          if (!barcodeValue) {
-            throw new Error('No barcode detected');
-          }
-
-          createResult(fileResultsEl, barcodeValue);
-
-          if (settings?.addToHistory) {
-            bsHistoryEl?.add(barcodeValue);
-          }
-
-          triggerScanEffects();
-        } catch (err) {
-          log.error(err);
-
-          toastify(
-            '<strong>No barcode detected</strong><br><small>Please try again with a different image.</small>',
-            { variant: 'danger', trustDangerousInnerHTML: true }
-          );
-
-          triggerScanEffects({ success: false });
-        }
-      };
-
-      image.src = data;
-      image.alt = 'Image preview';
-
-      dropzoneEl.replaceChildren();
-
-      const preview = document.createElement('div');
-      preview.className = 'dropzone-preview';
-
-      const imageWrapper = document.createElement('div');
-      imageWrapper.className = 'dropzone-preview__image-wrapper';
-
-      const fileNameWrapper = document.createElement('div');
-      fileNameWrapper.className = 'dropzone-preview__file-name';
-      fileNameWrapper.textContent = file.name;
-
-      imageWrapper.appendChild(image);
-      preview.appendChild(imageWrapper);
-      preview.appendChild(fileNameWrapper);
-      dropzoneEl.prepend(preview);
-    };
-
-    reader.readAsDataURL(file);
-  }
-
-  /**
-   * Handles the drop event on the dropzone.
-   *
-   * @param {CustomEvent} evt - The event object.
-   */
-  function handleFileDrop(evt) {
-    const file = evt.detail.acceptedFiles[0];
-    handleFileSelect(file);
-  }
-
-  /**
-   * Handles the resize event on the video-capture element.
-   * It is responsible for resizing the scan frame based on the video element.
-   */
-  function handleVideoCaptureResize() {
-    resizeScanFrame(videoCaptureEl.shadowRoot.querySelector('video'), scanFrameEl);
-  }
-
-  /**
-   * Handles the video play event on the video-capture element.
-   * It is responsible for displaying the scan frame and starting the scan process.
-   * It also handles the zoom controls if the browser supports it.
-   *
-   * @param {CustomEvent} evt - The event object.
-   */
-  async function handleVideoCapturePlay(evt) {
-    scanFrameEl?.removeAttribute('hidden');
-    resizeScanFrame(evt.detail.video, scanFrameEl);
-    scan();
-
-    const trackSettings = evt.target.getTrackSettings();
-    const trackCapabilities = evt.target.getTrackCapabilities();
-    const zoomLevelEl = document.getElementById('zoomLevel');
-
-    // Torch CTA
-    if (trackCapabilities?.torch) {
-      torchButton?.addEventListener('click', handleTorchButtonClick);
-      torchButton?.removeAttribute('hidden');
-
-      if (videoCaptureEl.hasAttribute('torch')) {
-        toggleTorchButtonStatus({ el: torchButton, isTorchOn: true });
-      }
-    }
-
-    // Zoom controls
-    if (trackSettings?.zoom && trackCapabilities?.zoom) {
-      const zoomControls = document.getElementById('zoomControls');
-      const minZoom = trackCapabilities?.zoom?.min || 0;
-      const maxZoom = trackCapabilities?.zoom?.max || 10;
-      let currentZoom = trackSettings?.zoom || 1;
-
-      const handleZoomControlsClick = evt => {
-        const zoomInBtn = evt.target.closest('[data-action="zoom-in"]');
-        const zoomOutBtn = evt.target.closest('[data-action="zoom-out"]');
-
-        if (zoomInBtn && currentZoom < maxZoom) {
-          currentZoom += 0.5;
-        }
-
-        if (zoomOutBtn && currentZoom > minZoom) {
-          currentZoom -= 0.5;
-        }
-
-        zoomLevelEl.textContent = currentZoom.toFixed(1);
-        videoCaptureEl.zoom = currentZoom;
-      };
-
-      zoomControls?.addEventListener('click', handleZoomControlsClick);
-      zoomControls?.removeAttribute('hidden');
-      zoomLevelEl.textContent = currentZoom.toFixed(1);
-    }
-
-    // Camera select
-    const videoInputDevices = await VideoCapture.getVideoInputDevices();
-
-    videoInputDevices.forEach((device, index) => {
-      const option = document.createElement('option');
-      option.value = device.deviceId;
-      option.textContent = device.label || `Camera ${index + 1}`;
-      cameraSelect.appendChild(option);
+      productDetailsEl.append(dt, dd);
     });
 
-    if (videoInputDevices.length > 1) {
-      cameraSelect?.addEventListener('change', handleCameraSelectChange);
-      cameraSelect?.removeAttribute('hidden');
-    }
-  }
-
-  /**
-   * Handles the error event on the video-capture element.
-   * It is responsible for displaying an error message if the camera cannot be accessed or permission is denied.
-   *
-   * @param {CustomEvent} evt - The event object.
-   */
-  function handleVideoCaptureError(evt) {
-    const error = evt.detail.error;
-
-    if (error.name === 'NotFoundError') {
-      // If the browser cannot find all media tracks with the specified types that meet the constraints given.
-      return;
+    if (typeof product.image_front_url === 'string' && product.image_front_url.trim().length > 0) {
+      productImageEl.src = product.image_front_url;
+      productImageEl.removeAttribute('hidden');
     }
 
-    const errorMessage =
-      error.name === 'NotAllowedError'
-        ? `<strong>Error accessing camera</strong><br>Permission to use webcam was denied or video Autoplay is disabled. Reload the page to give appropriate permissions to webcam.`
-        : error.message;
-
-    cameraPanel.innerHTML = /* html */ `
-      <alert-element variant="danger" open>
-        <span slot="icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="1.25em" height="1.25em" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M4.54.146A.5.5 0 0 1 4.893 0h6.214a.5.5 0 0 1 .353.146l4.394 4.394a.5.5 0 0 1 .146.353v6.214a.5.5 0 0 1-.146.353l-4.394 4.394a.5.5 0 0 1-.353.146H4.893a.5.5 0 0 1-.353-.146L.146 11.46A.5.5 0 0 1 0 11.107V4.893a.5.5 0 0 1 .146-.353zM5.1 1 1 5.1v5.8L5.1 15h5.8l4.1-4.1V5.1L10.9 1z"/>
-            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
-          </svg>
-        </span>
-        ${errorMessage}
-      </alert-element>
-    `;
+    productCardEl.removeAttribute('hidden');
   }
 
-  /**
-   * Handles the settings button click event.
-   * It is responsible for displaying the settings dialog.
-   */
-  function handleSettingsButtonClick() {
-    settingsDialog.open = true;
+  function clearProduct() {
+    productDetailsEl.replaceChildren();
+    productImageEl.removeAttribute('src');
+    productImageEl.setAttribute('hidden', '');
+    productCardEl.setAttribute('hidden', '');
   }
 
-  /**
-   * Handles the change event on the settings form.
-   * It is responsible for saving the settings to persistent storage and updating the settings.
-   *
-   * @param {Event} evt - The event object.
-   */
-  async function handleSettingsFormChange(evt) {
-    evt.preventDefault();
-
-    const settings = {};
-    const formData = new FormData(settingsForm);
-    const generalSettings = formData.getAll('general-settings');
-    const formatsSettings = formData.getAll('formats-settings');
-
-    generalSettings.forEach(value => (settings[value] = true));
-    settings.formats = formatsSettings;
-    setSettings(settings);
-
-    if (evt.target.name === 'formats-settings') {
-      barcodeReader = await BarcodeReader.create(formatsSettings);
-    }
-  }
-
-  /**
-   * Handles the click event on the history button.
-   * It is responsible for displaying the history dialog.
-   */
-  function handleHistoryButtonClick() {
-    historyDialog.open = true;
-  }
-
-  /**
-   * Handles the click event on the torch button.
-   * It is responsible for toggling the torch on and off.
-   *
-   * @param {MouseEvent} evt - The event object.
-   */
-  function handleTorchButtonClick(evt) {
-    videoCaptureEl.torch = !videoCaptureEl.torch;
-
-    toggleTorchButtonStatus({
-      el: evt.currentTarget,
-      isTorchOn: videoCaptureEl.hasAttribute('torch')
-    });
-  }
-
-  /**
-   * Handles the change event on the camera select element.
-   * It is responsible for restarting the video stream with the selected video input device id.
-   *
-   * @param {Event} evt - The event object.
-   */
-  function handleCameraSelectChange(evt) {
-    if (typeof videoCaptureEl.restartVideoStream !== 'function') {
-      return;
+  function normalizeValue(value) {
+    if (value == null || value === '') {
+      return '-';
     }
 
-    const videoDeviceId = evt.target.value || undefined;
-    videoCaptureEl.restartVideoStream(videoDeviceId);
+    return String(value);
   }
 
-  /**
-   * Handles the visibility change event on the document.
-   * It is responsible for stopping the scan process when the document is not visible.
-   */
-  function handleDocumentVisibilityChange() {
-    const selectedTab = tabGroupEl.querySelector('[selected]');
-    const tabId = selectedTab.getAttribute('id');
-
-    if (tabId !== 'cameraTab') {
-      return;
+  function normalizeGrade(value) {
+    if (value == null || value === '') {
+      return '-';
     }
 
-    if (document.visibilityState === 'hidden') {
-      shouldScan = false;
-
-      if (videoCaptureEl != null && typeof videoCaptureEl.stopVideoStream === 'function') {
-        videoCaptureEl.stopVideoStream();
-      }
-    } else {
-      shouldScan = true;
-
-      // Get the latest instance of video-capture element to ensure we don't use the cached one.
-      const videoCaptureEl = document.querySelector('video-capture');
-
-      if (!videoCaptureEl) {
-        return;
-      }
-
-      if (!videoCaptureEl.loading && scanBtn.hasAttribute('hidden')) {
-        scan();
-      }
-
-      if (typeof videoCaptureEl.startVideoStream === 'function') {
-        const videoDeviceId = cameraSelect?.value || undefined;
-        videoCaptureEl.startVideoStream(videoDeviceId);
-      }
-    }
+    return typeof value === 'string' ? value.toUpperCase() : String(value);
   }
 
-  /**
-   * Handles the escape key press event on the document.
-   * It is responsible for triggering the scan button click event if there is already a barcode detected.
-   */
-  function handleDocumentEscapeKey() {
-    const cameraTabSelected = tabGroupEl.querySelector('#cameraTab').hasAttribute('selected');
-    const scanBtnVisible = !scanBtn.hidden;
-    const settingsDialogOpen = settingsDialog.hasAttribute('open');
-    const historyDialogOpen = historyDialog.hasAttribute('open');
-    const anyDialogOpen = settingsDialogOpen || historyDialogOpen;
-
-    if (!scanBtnVisible || !cameraTabSelected || anyDialogOpen) {
-      return;
-    }
-
-    scanBtn.click();
+  function setStatus(message) {
+    statusEl.textContent = message;
   }
 
-  /**
-   * Handles the key down event on the document.
-   */
-  function handleDocumentKeyDown(evt) {
-    if (evt.key === 'Escape') {
-      handleDocumentEscapeKey();
-    }
+  function showError(message) {
+    errorEl.textContent = message;
+    errorEl.removeAttribute('hidden');
   }
 
-  /**
-   * Handles success events from the history component.
-   *
-   * @param {CustomEvent<{ type: string, message: string }>} evt - The event object.
-   */
-  function handleHistorySuccess(evt) {
-    const { type, message } = evt.detail;
-
-    if (type === 'add') {
-      toastify(message, { variant: 'success' });
-    }
+  function clearError() {
+    errorEl.textContent = '';
+    errorEl.setAttribute('hidden', '');
   }
 
-  /**
-   * Handles error events from the history component.
-   *
-   * @param {CustomEvent<{ type: string, message: string }>} evt - The event object.
-   */
-  function handleHistoryError(evt) {
-    const { type, message } = evt.detail;
-
-    if (type === 'remove' || type === 'empty') {
-      historyDialog?.hide();
-    }
-
-    toastify(message, { variant: 'danger' });
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
   }
-
-  scanBtn.addEventListener('click', handleScanButtonClick);
-  tabGroupEl.addEventListener('a-tab-show', debounce(handleTabShow, 250));
-  dropzoneEl.addEventListener('files-dropzone-drop', handleFileDrop);
-  resizeObserverEl.addEventListener('resize-observer:resize', handleVideoCaptureResize);
-  settingsBtn.addEventListener('click', handleSettingsButtonClick);
-  settingsForm.addEventListener('change', debounce(handleSettingsFormChange, 500));
-  historyBtn.addEventListener('click', handleHistoryButtonClick);
-  document.addEventListener('visibilitychange', handleDocumentVisibilityChange);
-  document.addEventListener('keydown', handleDocumentKeyDown);
-  document.addEventListener('bs-history-success', handleHistorySuccess);
-  document.addEventListener('bs-history-error', handleHistoryError);
 })();
