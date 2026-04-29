@@ -4,6 +4,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use tower_http::cors::{Any, CorsLayer};
 use serde_json::json;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::sync::Arc;
@@ -38,12 +39,18 @@ async fn main() {
 
     let state = AppState { db: pool };
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let app = Router::new()
         .route("/api", get(hello_world))
         .route("/api/products/count", get(get_products_count))
         .route("/api/products/{barcode}", get(get_products_by_barcode))
         .route("/api/products/openfoodfacts/{barcode}", get(get_products_by_barcode_from_openfoodfacts))
         .with_state(state);
+        .layer(cors);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Server started successfully at http://0.0.0.0:3000");
