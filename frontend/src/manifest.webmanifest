@@ -3,33 +3,11 @@
   "name": "Barcode Scanner",
   "description": "A Progressive Web Application (PWA) that scans barcodes of various formats, using the Barcode Detection API.",
   "categories": ["barcode", "scanner", "utilities"],
-  "screenshots": [
-    {
-      "src": "assets/app-icons/screenshots/camera-scanner.png",
-      "sizes": "1750x2504",
-      "type": "image/png"
-    },
-    {
-      "src": "assets/app-icons/screenshots/image-scanner.png",
-      "sizes": "1750x2504",
-      "type": "image/png"
-    }
-  ],
   "icons": [
     {
-      "src": "assets/app-icons/icon-small.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "assets/app-icons/icon-medium.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "assets/app-icons/icon-large.png",
+      "src": "assets/app-icons/icon-large.webp",
       "sizes": "1024x1024",
-      "type": "image/png"
+      "type": "image/webp"
     }
   ],
   "start_url": ".",
