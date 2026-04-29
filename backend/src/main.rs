@@ -7,7 +7,8 @@ use axum::{
 use serde_json::json;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::sync::Arc;
-use dotenv::dotenv; 
+use dotenv::dotenv;
+use reqwest::StatusCode as HttpStatusCode;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -41,6 +42,7 @@ async fn main() {
         .route("/api", get(hello_world))
         .route("/api/products/count", get(get_products_count))
         .route("/api/products/{barcode}", get(get_products_by_barcode))
+        .route("/api/products/openfoodfacts/{barcode}", get(get_products_by_barcode_from_openfoodfacts))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -122,6 +124,76 @@ async fn get_products_count(State(state): State<AppState>) -> impl IntoResponse 
                 "message": format!("Erreur DB: {}", e)
             });
             (axum::http::StatusCode::INTERNAL_SERVER_ERROR, Json(json_response)).into_response()
+        }
+    }
+}
+
+
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct OffResponse {
+    pub status: i32, // 1 si trouvé, 0 sinon
+    pub code: Option<String>,
+    pub product: Option<ProductInfo>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProductInfo {
+    pub product_name_fr: Option<String>,
+    pub product_name: Option<String>,
+    pub brands: Option<String>,
+    pub quantity: Option<String>,
+    pub image_front_url: Option<String>,
+    pub nutriscore_grade: Option<String>,
+    pub ecoscore_grade: Option<String>,
+    pub nova_group: Option<i32>,
+    pub ingredients_text_fr: Option<String>,
+}
+
+async fn get_products_by_barcode_from_openfoodfacts(
+    Path(barcode): Path<String>, 
+    State(_state): State<AppState> // Remet _state si tu n'utilises pas la DB ici
+) -> impl IntoResponse {
+    let url = format!("https://world.openfoodfacts.org/api/v2/product/{}.json", barcode);
+    
+    match reqwest::get(&url).await {
+        Ok(response) => {
+            if response.status().is_success() {
+                match response.json::<OffResponse>().await {
+                    Ok(off_data) => {
+                        if off_data.status == 1 && off_data.product.is_some() {
+                            Json(json!({
+                                "status": "ok",
+                                "data": off_data.product.unwrap()
+                            })).into_response()
+                        } else {
+                            (
+                                HttpStatusCode::NOT_FOUND,
+                                Json(json!({ "status": "error", "message": "Produit non trouvé sur OpenFoodFacts" }))
+                            ).into_response()
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Erreur parsing JSON ciblée: {}", e);
+                        (
+                            HttpStatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({ "status": "error", "message": "Erreur lors de l'extraction des données" }))
+                        ).into_response()
+                    }
+                }
+            } else {
+                (
+                    HttpStatusCode::BAD_GATEWAY,
+                    Json(json!({ "status": "error", "message": "Erreur avec le service OpenFoodFacts" }))
+                ).into_response()
+            }
+        }
+        Err(e) => {
+            eprintln!("Erreur requête HTTP: {}", e);
+            (
+                HttpStatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "status": "error", "message": "Erreur réseau interne" }))
+            ).into_response()
         }
     }
 }
