@@ -49,7 +49,7 @@ async fn main() {
         .route("/api/products/count", get(get_products_count))
         .route("/api/products/{barcode}", get(get_products_by_barcode))
         .route("/api/products/openfoodfacts/{barcode}", get(get_products_by_barcode_from_openfoodfacts))
-        .with_state(state);
+        .with_state(state)
         .layer(cors);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
