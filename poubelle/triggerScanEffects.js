@@ -1,5 +1,5 @@
 import { getSettings } from '../services/storage.js';
-import { beep } from '../utils/beep.js';
+import { beep } from '../../../../poubelle/beep.js';
 import { vibrate } from '../utils/vibrate.js';
 
 const RATE_LIMIT = 1000;
