@@ -52,8 +52,8 @@ async fn main() {
         .with_state(state)
         .layer(cors);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Server started successfully at http://0.0.0.0:3000");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3003").await.unwrap();
+    println!("Server started successfully at http://0.0.0.0:3003");
     axum::serve(listener, app).await.unwrap();
 }
 
