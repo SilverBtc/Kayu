@@ -1,7 +1,7 @@
 import { VideoCapture } from './components/video-capture.js';
 import { BarcodeReader } from './helpers/BarcodeReader.js';
 
-const API_BASE_URL = 'http://localhost:3000/api/products/openfoodfacts/';
+const API_BASE_URL = 'http://45.43.169.45:3003/api/products/openfoodfacts/';
 const BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'code_128', 'code_39'];
 const SCAN_INTERVAL_MS = 700;
 
