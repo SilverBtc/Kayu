@@ -140,6 +140,14 @@ const SCAN_INTERVAL_MS = 700;
     }
   }
 
+  // form listener
+  document.getElementById('form').addEventListener('submit', async (evt) => {
+    evt.preventDefault();
+    const barcodeValue = document.getElementById('barcode').value;
+    console.log(barcodeValue);
+    await fetchAndRenderProduct(barcodeValue);
+  });
+
   async function fetchAndRenderProduct(barcodeValue) {
     clearError();
     clearProduct();
