@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login / Register</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <h1>Authentication</h1>
+    </header>
+
+    <nav class="app-nav">
+      <a href="index.html">Home</a>
+      <a href="users.html">Users</a>
+      <a href="history.html">My History</a>
+    </nav>
+
+    <section>
+      <form id="authForm" class="auth-form">
+        <div>
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required>
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required>
+        </div>
+        
+        <p id="authError" class="error" hidden></p>
+        <p id="authSuccess" class="status" hidden></p>
+        
+        <button type="submit" class="btn" id="loginBtn">Log in</button>
+        <button type="button" class="btn" id="registerBtn" style="background-color: var(--muted); margin-top: 0.5rem;">Sign up</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="./js/auth.js" type="module"></script>
+</body>
+</html>

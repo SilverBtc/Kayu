@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User List</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <h1>Users</h1>
+      <p>Registered members on the platform.</p>
+    </header>
+
+    <nav class="app-nav">
+      <a href="index.html">Home</a>
+      <a href="login.html">Login</a>
+      <a href="history.html">My History</a>
+    </nav>
+
+    <section>
+      <p id="usersError" class="error" hidden></p>
+      
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>ID (Partial)</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr>
+            <td colspan="2" style="text-align: center;">Loading...</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="./js/users.js" type="module"></script>
+</body>
+</html>

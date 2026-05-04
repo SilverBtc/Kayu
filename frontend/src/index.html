@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kayu</title>
+  <meta
+    name="description"
+    content="Kayu: Barcode scanner and product information retrieval via API."
+  >
+  <link rel="shortcut icon" href="assets/app-icons/favicon.ico">
+  <link rel="apple-touch-icon" href="assets/app-icons/apple-touch-icon.webp">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript">
+      JavaScript is required to use the scanner.
+    </div>
+  </noscript>
+
+  <main class="app">
+    <header class="app-header">
+      <img src="assets/app-icons/icon-large.webp" width="72" height="72" alt="">
+      <h1>Scan a barcode</h1>
+    </header>
+
+    <nav class="app-nav">
+      <a href="login.html" id="authLink">Login</a>
+      <a href="users.html">Users</a>
+      <a href="history.html">My History</a>
+    </nav>
+
+    <section class="scanner" aria-label="Scan area">
+      <div class="capture-shell">
+        <video-capture id="videoCapture" auto-play facing-mode="environment" zoom="2"></video-capture>
+        <div class="scan-overlay" aria-hidden="true"></div>
+      </div>
+
+      <p id="status" class="status" role="status" aria-live="polite">
+        Initializing camera...
+      </p>
+      <p id="error" class="error" role="alert" hidden></p>
+    </section>
+
+    <section class="product" aria-label="Product result">
+      <h2>Detected product</h2>
+      <p class="barcode-line">
+        Code:
+        <strong id="barcodeValue">-</strong>
+      </p>
+
+      <article id="productCard" class="product-card" hidden>
+        <img id="productImage" alt="Product image" hidden>
+        <dl id="productDetails" class="product-details"></dl>
+      </article>
+    </section>
+  </main>
+<!-- 
+  <form id="form">
+    <input type="text" name="barcode" id="barcode">
+    <button type="submit">Send</button>
+  </form> -->
+
+  <script src="./js/index.js" type="module"></script>
+</body>
+</html>
