@@ -56,6 +56,14 @@ Similar letter grading (A–E) focused on **ecological footprint**. Factors incl
 
 ---
 
+
+| Member | Role |
+|--------|------|
+| [Silver.btc](https://github.com/SilverBtc) | Project lead · Rust backend · API design |
+| [Maxime](https://github.com/LeoCrge) | Frontend (HTML/CSS/JS) · UI/UX |
+| [Leo](https://github.com/DarfilalAbdou) | Data integration · Scoring indexes (Nutri-Score, NOVA, Eco-Score) |
+|[Abdou.Samad]|  | Frontend · Testing · Documentation |
+
 ## Getting Started
 
 ### Prerequisites
