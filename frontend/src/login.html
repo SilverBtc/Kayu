@@ -3,26 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login / Register</title>
+  <title>Login / Register - Kayu</title>
   <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
   <main class="app">
     <header class="app-header">
-      <h1>Authentication</h1>
+      <h1>My Account</h1>
+      <p>Log in to view your history.</p>
     </header>
 
     <nav class="app-nav">
       <a href="index.html">Home</a>
-      <a href="users.html">Users</a>
+      <a href="faq.html">FAQ</a>
+      <a href="users.html" id="adminLink" hidden>Admin Panel</a>
       <a href="history.html">My History</a>
     </nav>
 
     <section>
       <form id="authForm" class="auth-form">
         <div>
-          <label for="username">Username</label>
-          <input type="text" id="username" name="username" required>
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" required>
         </div>
         <div>
           <label for="password">Password</label>
@@ -32,8 +34,10 @@
         <p id="authError" class="error" hidden></p>
         <p id="authSuccess" class="status" hidden></p>
         
-        <button type="submit" class="btn" id="loginBtn">Log in</button>
-        <button type="button" class="btn" id="registerBtn" style="background-color: var(--muted); margin-top: 0.5rem;">Sign up</button>
+        <div class="form-actions">
+          <button type="submit" id="loginBtn" class="btn">Login</button>
+          <button type="button" id="registerBtn" class="btn btn-secondary">Create an account</button>
+        </div>
       </form>
     </section>
   </main>

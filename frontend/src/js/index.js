@@ -20,24 +20,31 @@ const SCAN_INTERVAL_MS = 700;
   let pageIsClosing = false;
 
   const authLink = document.getElementById('authLink');
+  const adminLink = document.getElementById('adminLink');
   const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
   
   if (token && authLink) {
-    authLink.textContent = 'Log out';
+    authLink.textContent = 'Logout';
     authLink.href = '#';
     authLink.addEventListener('click', (e) => {
       e.preventDefault();
       localStorage.removeItem('token');
+      localStorage.removeItem('role');
       window.location.reload();
     });
+  }
+
+  if (role === 'admin' && adminLink) {
+    adminLink.removeAttribute('hidden');
   }
 
   VideoCapture.defineCustomElement();
 
   const { barcodeReaderError } = await BarcodeReader.setup();
   if (barcodeReaderError) {
-    showError('Your browser does not support barcode detection.');
-    setStatus('Scanner unavailable.');
+    showError('Votre navigateur ne supporte pas la detection de code-barres.');
+    setStatus('Scanner indisponible.');
     return;
   }
 
@@ -46,8 +53,8 @@ const SCAN_INTERVAL_MS = 700;
   const activeFormats = selectedFormats.length > 0 ? selectedFormats : supportedFormats;
 
   if (activeFormats.length === 0) {
-    showError('No barcode format is supported on this browser.');
-    setStatus('Scanner unavailable.');
+    showError('Aucun format de code-barres n est supporte sur ce navigateur.');
+    setStatus('Scanner indisponible.');
     return;
   }
 
@@ -56,7 +63,7 @@ const SCAN_INTERVAL_MS = 700;
 
   videoCaptureEl.addEventListener('video-capture:video-play', () => {
     applyZoomX2(videoCaptureEl);
-    // setStatus('Camera active. Place a barcode in the center.');
+    // setStatus('Camera active. Placez un code-barres au centre.');
     startScanLoop();
   });
 
@@ -64,7 +71,7 @@ const SCAN_INTERVAL_MS = 700;
     const errorName = evt?.detail?.error?.name || '';
 
     if (errorName === 'NotAllowedError') {
-      showError('Camera access denied. Allow camera access, then reload the page.');
+      showError('Camera access denied. Authorize the camera and reload the page.');
     } else if (errorName === 'NotFoundError') {
       showError('No camera detected.');
     } else {
@@ -153,7 +160,7 @@ const SCAN_INTERVAL_MS = 700;
     }
   }
 
-  // Form listener
+  // form listener
   document.getElementById('form').addEventListener('submit', async (evt) => {
     evt.preventDefault();
     const barcodeValue = document.getElementById('barcode').value;
@@ -164,7 +171,7 @@ const SCAN_INTERVAL_MS = 700;
   async function fetchAndRenderProduct(barcodeValue) {
     clearError();
     clearProduct();
-    setStatus(`Code detected: ${barcodeValue}. Loading product info...`);
+    setStatus(`Barcode detected: ${barcodeValue}. Loading product info...`);
 
     try {
       const response = await fetch(`${API_BASE_URL}/products/openfoodfacts/${encodeURIComponent(barcodeValue)}`);
@@ -195,13 +202,13 @@ const SCAN_INTERVAL_MS = 700;
             body: JSON.stringify({ barcode: barcodeValue, product_name: productName })
           });
         } catch (e) {
-          console.error('Error while saving scan history', e);
+          console.error("Error while saving history", e);
         }
       }
 
     } catch {
       showError(`No product info found for code ${barcodeValue}.`);
-      setStatus('Scan active. Show another barcode.');
+      setStatus('Scan active. Present another barcode.');
     }
   }
 
@@ -213,7 +220,7 @@ const SCAN_INTERVAL_MS = 700;
       ['NutriScore', normalizeGrade(product.nutriscore_grade)],
       ['NOVA', normalizeValue(product.nova_group)],
       ['EcoScore', normalizeGrade(product.ecoscore_grade)],
-      ['Ingredients EN', product.ingredients_text_en || product.ingredients_text || '-']
+      ['Ingredients FR', product.ingredients_text_fr || '-']
     ];
 
     rows.forEach(([label, value]) => {

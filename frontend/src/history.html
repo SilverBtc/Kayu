@@ -3,19 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My History</title>
+  <title>Scan History - Kayu</title>
   <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
   <main class="app">
     <header class="app-header">
       <h1>Scan History</h1>
-      <p>Your recently scanned products.</p>
+      <p>Your latest scanned products.</p>
     </header>
 
     <nav class="app-nav">
       <a href="index.html">Home</a>
-      <a href="users.html">Users</a>
+      <a href="faq.html">FAQ</a>
+      <a href="users.html" id="adminLink" hidden>Admin Panel</a>
       <a href="login.html" id="authLink">Login</a>
     </nav>
 
@@ -38,7 +39,7 @@
       </table>
 
       <div id="loginPrompt" style="text-align: center; margin-top: 2rem;" hidden>
-        <p>You must be logged in to view your history.</p>
+        <p>Please <a href="login.html">log in</a> to view your history.</p>
         <a href="login.html" class="btn" style="text-decoration: none; display: inline-block; margin-top: 1rem;">Log in</a>
       </div>
     </section>

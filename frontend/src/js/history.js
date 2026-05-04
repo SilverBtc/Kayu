@@ -3,22 +3,30 @@ const API_BASE_URL = 'https://translations-attorney-parliamentary-improvements.t
 document.addEventListener('DOMContentLoaded', async () => {
   const token = localStorage.getItem('token');
   const authLink = document.getElementById('authLink');
+  const adminLink = document.getElementById('adminLink');
   const historyTable = document.getElementById('historyTable');
   const tbody = document.getElementById('historyTableBody');
   const errorEl = document.getElementById('historyError');
   const loginPrompt = document.getElementById('loginPrompt');
 
+  const role = localStorage.getItem('role');
+
   if (token) {
-    authLink.textContent = 'Log out';
+    authLink.textContent = 'Logout';
     authLink.href = '#';
     authLink.addEventListener('click', (e) => {
       e.preventDefault();
       localStorage.removeItem('token');
+      localStorage.removeItem('role');
       window.location.reload();
     });
   } else {
     loginPrompt.removeAttribute('hidden');
     return;
+  }
+
+  if (role === 'admin' && adminLink) {
+    adminLink.removeAttribute('hidden');
   }
 
   try {
@@ -34,16 +42,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (res.status === 401) {
         localStorage.removeItem('token');
         loginPrompt.removeAttribute('hidden');
-        throw new Error('Session expired. Please log in again.');
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
       }
-      throw new Error(data.message || 'Unable to load history.');
+      throw new Error(data.message || 'Impossible de charger l\'historique.');
     }
 
     historyTable.removeAttribute('hidden');
     tbody.innerHTML = '';
 
     if (data.scans.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">No scans saved yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Aucun scan enregistré pour le moment.</td></tr>';
       return;
     }
 
@@ -61,7 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       tdBarcode.style.fontFamily = 'monospace';
 
       const tdProduct = document.createElement('td');
-      tdProduct.textContent = scan.product_name || 'Unknown product';
+      tdProduct.textContent = scan.product_name || 'Produit inconnu';
       tdProduct.style.fontWeight = '600';
 
       tr.appendChild(tdDate);
