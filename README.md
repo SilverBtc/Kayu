@@ -8,7 +8,7 @@ A web application that scans product barcodes and evaluates their **nutritional 
 
 ## Live Demo
 
-[kayu.app](https://github.com/SilverBtc/Kayu) *(coming tomorrow)*
+[kayu.app](https://kayu.silvernight-luther.workers.dev/) *(accessible now)*
 
 ---
 
